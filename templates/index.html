@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spam Message Detector • AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">🤖</div>
+        <div>
+          <h1 class="title">Spam Message Detector</h1>
+          <p class="subtitle">AI-powered protection for your inbox</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="themeToggle" class="icon-btn" aria-label="Toggle theme">🌙</button>
+        <button id="clearBtn" class="ghost-btn" title="Clear text">Clear</button>
+      </div>
+    </header>
+
+    <main class="container" role="main">
+      <section class="card" aria-labelledby="analyzeHeading">
+        <div class="card-head">
+          <h2 id="analyzeHeading" class="card-title">Analyze Message</h2>
+          <p class="card-desc">Paste the message below — the AI will check whether it's spam.</p>
+        </div>
+
+        <form id="spamForm" class="form" autocomplete="off" novalidate>
+          <label for="message" class="sr-only">Message</label>
+          <textarea id="message" name="message" maxlength="1000" placeholder="Type or paste your message here..." required aria-required="true" rows="6"></textarea>
+
+          <div class="form-footer">
+            <div class="left-meta">
+              <div class="char-count" id="charCount" aria-live="polite">0 / 1000</div>
+              <div class="hint">Max 1000 characters</div>
+            </div>
+
+            <div class="right-actions">
+              <button type="submit" class="btn primary">Analyze</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result" id="output" aria-live="polite">
+          <div class="result-inner">
+            <div class="loader" id="loader" role="status" aria-hidden="true">
+              <svg viewBox="0 0 50 50" class="spinner" aria-hidden="true">
+                <circle cx="25" cy="25" r="20" stroke-width="4" fill="none"></circle>
+              </svg>
+            </div>
+
+            <div class="prediction" id="predictionArea" hidden>
+              <div class="prediction-left">
+                <div id="prediction-icon" class="prediction-icon" aria-hidden="true">🔍</div>
+                <div id="prediction-text" class="prediction-text">Awaiting input</div>
+              </div>
+
+              <div class="prediction-right">
+                <div class="confidence-wrap">
+                  <div class="confidence-bar-bg" aria-hidden="true">
+                    <div id="confidence-bar" class="confidence-bar"></div>
+                  </div>
+                  <div id="confidence-text" class="confidence-text">Confidence: —</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="message-preview" class="message-preview" hidden>
+              <div class="preview-heading">Message preview</div>
+              <div id="raw-message" class="preview-text" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="examples">
+          <strong>Examples:</strong>
+          <button type="button" class="chip" data-sample="Congratulations! You've won a $1000 gift card. Click here to claim.">Claim prize</button>
+          <button type="button" class="chip" data-sample="Reminder: Your appointment is tomorrow at 2pm. Reply YES to confirm.">Appointment reminder</button>
+          <button type="button" class="chip" data-sample="Can you review the attached invoice and approve payment?">Work message</button>
+        </div>
+      </section>
+
+      <aside class="info">
+        <h3>How it works</h3>
+        <p>Our model analyzes wording, links, and patterns to estimate whether a message is spam. Use this as a helper — always exercise caution with unknown senders and links.</p>
+      </aside>
+    </main>
+
+    <footer class="site-footer">
+      <div>Built with ❤️ • FastAPI + Machine Learning</div>
+      <div class="small">Version 1.0</div>
+    </footer>
+  </div>
+
+  <script>
+    // Elements
+    const form = document.getElementById('spamForm');
+    const messageInput = document.getElementById('message');
+    const charCount = document.getElementById('charCount');
+    const loader = document.getElementById('loader');
+    const predictionArea = document.getElementById('predictionArea');
+    const predictionText = document.getElementById('prediction-text');
+    const predictionIcon = document.getElementById('prediction-icon');
+    const bar = document.getElementById('confidence-bar');
+    const confidenceText = document.getElementById('confidence-text');
+    const rawMessage = document.getElementById('raw-message');
+    const messagePreview = document.getElementById('message-preview');
+    const themeToggle = document.getElementById('themeToggle');
+    const clearBtn = document.getElementById('clearBtn');
+    const exampleChips = document.querySelectorAll('.chip');
+
+    // Theme handling (persist in localStorage)
+    const root = document.documentElement;
+    function setTheme(theme) {
+      root.setAttribute('data-theme', theme);
+      themeToggle.textContent = theme === 'dark' ? '🌙' : '☀️';
+      localStorage.setItem('theme', theme);
+    }
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    setTheme(savedTheme);
+    themeToggle.addEventListener('click', () => setTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+    // Character count
+    messageInput.addEventListener('input', () => {
+      charCount.textContent = `${messageInput.value.length} / ${messageInput.getAttribute('maxlength')}`;
+    });
+
+    // Example chips
+    exampleChips.forEach(btn => {
+      btn.addEventListener('click', () => {
+        messageInput.value = btn.dataset.sample;
+        charCount.textContent = `${messageInput.value.length} / ${messageInput.getAttribute('maxlength')}`;
+        messageInput.focus();
+      });
+    });
+
+    clearBtn.addEventListener('click', () => {
+      messageInput.value = '';
+      charCount.textContent = `0 / ${messageInput.getAttribute('maxlength')}`;
+      predictionArea.hidden = true;
+      messagePreview.hidden = true;
+      bar.style.width = '0%';
+    });
+
+    // Form submit
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = messageInput.value.trim();
+      if (!text) return;
+
+      // show loader
+      loader.style.display = 'block';
+      loader.setAttribute('aria-hidden', 'false');
+      predictionArea.hidden = true;
+      messagePreview.hidden = true;
+
+      try {
+        // If you run the backend on a different origin, replace '/predict' with full URL,
+        // e.g. 'http://127.0.0.1:8000/predict'
+        const resp = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        if (!resp.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const result = await resp.json();
+        const { prediction, result: message, confidence } = result;
+
+        // normalize confidence (0-100)
+        const conf = Math.max(0, Math.min(100, Math.round(Number(confidence) || 0)));
+
+        predictionText.textContent = prediction ? 'Spam Detected' : 'Message is Safe';
+        predictionIcon.textContent = prediction ? '🚫' : '✅';
+        predictionArea.hidden = false;
+        predictionArea.classList.toggle('is-spam', Boolean(prediction));
+        predictionArea.classList.toggle('is-ham', !Boolean(prediction));
+
+        bar.style.width = conf + '%';
+        bar.style.backgroundColor = prediction ? 'var(--accent-danger)' : 'var(--accent-safe)';
+        confidenceText.textContent = 'Confidence: ' + conf + '%';
+
+        // show preview
+        rawMessage.textContent = text;
+        messagePreview.hidden = false;
+      } catch (err) {
+        predictionText.textContent = 'Error checking message';
+        predictionIcon.textContent = '⚠️';
+        predictionArea.hidden = false;
+        confidenceText.textContent = '';
+      } finally {
+        loader.style.display = 'none';
+        loader.setAttribute('aria-hidden', 'true');
+      }
+    });
+
+    // Accessibility: keyboard submit via Ctrl+Enter in textarea
+    messageInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        form.requestSubmit();
+      }
+    });
+  </script>
+</body>
+</html>
